@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: twitchmidi-sqlite-pvc
+  namespace: twitchmidi
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: twitchmidi-discord-bot
+  namespace: twitchmidi
+  labels:
+    app: twitchmidi-discord-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: twitchmidi-discord-bot
+  template:
+    metadata:
+      labels:
+        app: twitchmidi-discord-bot
+    spec:
+      containers:
+      - name: bot
+        image: rafaelpernil/twitchmidi-discordbot:latest
+        imagePullPolicy: Always
+        env:
+        - name: DISCORD_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: twitchmidi-bot-secrets
+              key: DISCORD_TOKEN
+        - name: DISCORD_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: twitchmidi-bot-secrets
+              key: DISCORD_CLIENT_ID
+        - name: GEMINI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: twitchmidi-bot-secrets
+              key: GEMINI_API_KEY
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: twitchmidi-bot-secrets
+              key: ENCRYPTION_KEY
+        # Communicate securely with mcp-server via internal DNS
+        - name: MCP_SERVER_URL
+          value: "http://rag-mcp-server.twitchmidi.svc.cluster.local:3000/mcp"
+        - name: DB_PATH
+          value: "/app/data/bot.db"
+        volumeMounts:
+        - name: sqlite-data
+          mountPath: /app/data
+        resources:
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+      volumes:
+      - name: sqlite-data
+        persistentVolumeClaim:
+          claimName: twitchmidi-sqlite-pvc
+---
+

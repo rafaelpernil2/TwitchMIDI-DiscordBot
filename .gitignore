@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/
+.env
+test_fetch.js
+test_mcp.ts
+test_sse.cjs
+**/secret.yaml
