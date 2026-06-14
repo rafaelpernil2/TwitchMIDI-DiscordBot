@@ -31,7 +31,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const licenseKey = interaction.options.getString('license_key');
 
     if (!email || !licenseKey) {
-      await interaction.reply({ content: 'Email and license key are required.', ephemeral: true });
+      await interaction.reply({ content: 'Email and license key are required.', flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -40,10 +40,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await tempMcp.connect(email, licenseKey);
 
       dbService.saveUserCredentials(interaction.user.id, email, licenseKey);
-      await interaction.reply({ content: 'Successfully authenticated and saved your credentials securely.', ephemeral: true });
+      await interaction.reply({ content: 'Successfully authenticated and saved your credentials securely.', flags: MessageFlags.Ephemeral });
     } catch (err: any) {
       console.error(err);
-      await interaction.reply({ content: 'Authentication failed. Please check your username and license key.', ephemeral: true });
+      await interaction.reply({ content: 'Authentication failed. Please check your username and license key.', flags: MessageFlags.Ephemeral });
     }
     return;
   }
@@ -69,7 +69,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     const creds = dbService.getUserCredentials(interaction.user.id);
     if (!creds) {
-      await interaction.reply({ content: 'You must authenticate first using `/auth <username> <license_key>`.', ephemeral: true });
+      await interaction.reply({ content: 'You must authenticate first using `/auth <username> <license_key>`.', flags: MessageFlags.Ephemeral });
       return;
     }
 
