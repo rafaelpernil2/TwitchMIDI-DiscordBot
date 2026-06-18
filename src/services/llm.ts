@@ -15,6 +15,11 @@ const llmQueue = new PQueue({
   interval: 60000,
 });
 
+// Number of doc chunks to inject. Larger payloads measurably raise the rate of
+// flaky Gemma 500 INTERNAL errors (see askGemini retry below), so we pass top_k
+// explicitly instead of relying on the MCP server default, which may be higher.
+const DOC_TOP_K = 5;
+
 // Gemma models do NOT support the Gemini API function-calling round-trip: the
 // model can emit a functionCall, but sending the functionResponse back 500s
 // (ApiError INTERNAL). So we retrieve docs manually here and inject them as
@@ -25,18 +30,32 @@ async function retrieveDocs(mcpService: MCPService, query: string): Promise<stri
     const docTool = tools.find(t => t.name.includes('query') || t.name.includes('doc')) || tools[0];
     if (!docTool) return '';
 
+    const props = (docTool.inputSchema?.properties || {}) as Record<string, unknown>;
     const argKey =
       (docTool.inputSchema?.required as string[] | undefined)?.[0] ||
-      Object.keys(docTool.inputSchema?.properties || {})[0] ||
+      Object.keys(props)[0] ||
       'query';
 
-    const result = await mcpService.callTool(docTool.name, { [argKey]: query });
+    const args: Record<string, any> = { [argKey]: query };
+    if ('top_k' in props) args.top_k = DOC_TOP_K;
+
+    const result = await mcpService.callTool(docTool.name, args);
     return (result.content as any[]).map((c: any) => c.text).filter(Boolean).join('\n');
   } catch (err: any) {
     console.error('Doc retrieval failed:', err);
     return '';
   }
 }
+
+// Gemma's backend returns 500 INTERNAL non-deterministically — the SAME prompt
+// can fail one call and succeed the next, with failure more likely on larger
+// payloads (reproduced locally). It is NOT a payload-validity or auth problem,
+// so a plain retry clears it. (The separate MCP-redeploy de-auth 500 is not
+// retryable; those just exhaust the retries and fall through to the friendly
+// error in index.ts.)
+const MAX_RETRIES = 2;
+const RETRY_BASE_MS = 600;
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function askGemini(mcpService: MCPService, prompt: string, history: { role: string; parts: { text: string }[] }[]): Promise<string> {
   return llmQueue.add(async () => {
@@ -57,10 +76,23 @@ export async function askGemini(mcpService: MCPService, prompt: string, history:
       }))
     });
 
-    const response = await currentChat.sendMessage({
-      message: augmentedPrompt
-    });
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const response = await currentChat.sendMessage({
+          message: augmentedPrompt
+        });
+        return response.text || 'Sorry, I got an empty response.';
+      } catch (err: any) {
+        if (err?.status === 500 && attempt < MAX_RETRIES) {
+          console.warn(`Gemma 500 INTERNAL, retry ${attempt + 1}/${MAX_RETRIES}`);
+          await sleep(RETRY_BASE_MS * (attempt + 1));
+          continue;
+        }
+        throw err;
+      }
+    }
 
-    return response.text || 'Sorry, I got an empty response.';
+    // Unreachable: loop returns on success or throws on final failure.
+    throw new Error('Gemma request failed after retries.');
   }) as Promise<string>;
 }

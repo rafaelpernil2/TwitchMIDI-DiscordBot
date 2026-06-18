@@ -19,6 +19,13 @@ metadata:
     app: twitchmidi-discord-bot
 spec:
   replicas: 1
+  # Recreate (not the default RollingUpdate): a Discord bot must hold exactly ONE
+  # gateway connection per token. RollingUpdate's maxSurge briefly runs the new
+  # pod alongside the old, so both receive every message and reply twice. Recreate
+  # tears down the old pod before starting the new one — one instance at all times.
+  # It also matches the ReadWriteOnce PVC (single-attach) below.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: twitchmidi-discord-bot
