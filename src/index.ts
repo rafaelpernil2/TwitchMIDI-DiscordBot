@@ -6,6 +6,13 @@ import { dbService } from './services/db.js';
 import { chunkMessage } from './utils/chunk.js';
 import { sanitizeForDiscord } from './utils/sanitize.js';
 
+// Shown to users when the model/MCP backend errors out. Keep it actionable:
+// the most common self-fix after a backend change is to re-run /forget + /auth.
+const USER_FACING_ERROR =
+  "⚠️ Something went wrong while answering. This can happen after a docs/service update.\n" +
+  "Please try `/forget` and then `/auth` again to reconnect — that fixes most issues.\n" +
+  "If it keeps failing, the service may be temporarily down; try again in a minute.";
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -98,7 +105,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     } catch (err: any) {
       console.error(err);
-      await interaction.editReply(`An error occurred: ${err.message}`);
+      await interaction.editReply(USER_FACING_ERROR);
     }
   }
 });
@@ -145,7 +152,7 @@ client.on(Events.MessageCreate, async (message) => {
     }
   } catch (err: any) {
     console.error(err);
-    await replyMessage.edit(`An error occurred: ${err.message}`);
+    await replyMessage.edit(USER_FACING_ERROR);
   }
 });
 
