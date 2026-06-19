@@ -29,6 +29,9 @@ const commands = [
   new SlashCommandBuilder()
     .setName('forget')
     .setDescription('Delete your stored credentials from the bot'),
+  new SlashCommandBuilder()
+    .setName('clear')
+    .setDescription('Clear your conversation history and start fresh'),
 ].map((command) => command.toJSON());
 
 if (!process.env.DISCORD_TOKEN || !process.env.DISCORD_CLIENT_ID) {

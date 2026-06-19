@@ -67,6 +67,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.commandName === 'clear') {
+    const had = userHistories.delete(interaction.user.id);
+    await interaction.reply({
+      content: had
+        ? 'Your conversation history has been cleared. Starting fresh!'
+        : 'You have no conversation history to clear.',
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
   if (interaction.commandName === 'docs') {
     const query = interaction.options.getString('query');
     if (!query) {
