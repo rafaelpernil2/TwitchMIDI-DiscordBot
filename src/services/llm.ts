@@ -53,8 +53,11 @@ async function retrieveDocs(mcpService: MCPService, query: string): Promise<stri
 // so a plain retry clears it. (The separate MCP-redeploy de-auth 500 is not
 // retryable; those just exhaust the retries and fall through to the friendly
 // error in index.ts.)
-const MAX_RETRIES = 2;
-const RETRY_BASE_MS = 600;
+// 503 UNAVAILABLE ("high demand") is transient Google-side overload; retried
+// the same way, backoff is exponential so overload spikes get time to clear.
+const RETRYABLE_STATUS = [500, 503];
+const MAX_RETRIES = 3;
+const RETRY_BASE_MS = 1000;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function askGemini(mcpService: MCPService, prompt: string, history: { role: string; parts: { text: string }[] }[]): Promise<string> {
@@ -83,9 +86,9 @@ export async function askGemini(mcpService: MCPService, prompt: string, history:
         });
         return response.text || 'Sorry, I got an empty response.';
       } catch (err: any) {
-        if (err?.status === 500 && attempt < MAX_RETRIES) {
-          console.warn(`Gemma 500 INTERNAL, retry ${attempt + 1}/${MAX_RETRIES}`);
-          await sleep(RETRY_BASE_MS * (attempt + 1));
+        if (RETRYABLE_STATUS.includes(err?.status) && attempt < MAX_RETRIES) {
+          console.warn(`Gemma ${err.status}, retry ${attempt + 1}/${MAX_RETRIES}`);
+          await sleep(RETRY_BASE_MS * 2 ** attempt);
           continue;
         }
         throw err;
